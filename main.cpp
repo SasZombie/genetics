@@ -1,226 +1,108 @@
 #include <iostream>
-#include <vector>
-#include <array>
 #include <random>
+#include <unordered_map>
 
-constexpr size_t POPULATION_SIZE = 10;
+struct creature
+{
+    int size = 1;
+    size_t itersAlive = 0;
+};
+
+constexpr size_t INITIAL_POPULATION = 15;
 constexpr size_t ARRAY_LEN = 5;
 constexpr size_t GENERATIONS = 1000;
+constexpr float DEATH_PROB = 0.25;
 constexpr double MUTATION_RATE = 0.2;
-
-enum Road
-{
-    T = -1,
-    D = 1,
-    G = 100
-};
-
-using matrix = std::array<std::array<Road, ARRAY_LEN>, ARRAY_LEN>;
-
-using chromosome = std::vector<std::pair<size_t, size_t>>;
-
-constexpr matrix board = {{
-    {D, D, D, D, T},
-    {D, T, T, D, T},
-    {D, D, T, D, T},
-    {T, D, T, D, D},
-    {D, D, T, T, G},
-}};
-
-enum struct Directions
-{
-    UP,
-    DOWN,
-    LEFT,
-    RIGHT,
-    Count
-};
 
 std::random_device rd;
 std::mt19937 gen(rd());
 std::uniform_real_distribution mutationDist(0.0, 1.0);
-std::uniform_int_distribution<size_t> codeChoices(0, static_cast<size_t>(Directions::Count) - 1);
-std::uniform_int_distribution<size_t> selectionDist(0, POPULATION_SIZE - 1);
 
-bool validateDirection(size_t row, size_t col, Directions direction)
+size_t fitnessFunction(const creature &chromo)
 {
-    switch (direction)
-    {
-    case Directions::UP:
-        return (row == 0);
-    case Directions::DOWN:
-        return (row == ARRAY_LEN - 1);
-    case Directions::LEFT:
-        return (col == 0);
-    case Directions::RIGHT:
-        return (col == ARRAY_LEN - 1);
-    default:
-        std::cerr << "Unreachable";
-        break;
-    }
-
-    return true;
+    return chromo.itersAlive;
 }
 
-std::pair<size_t, size_t> choseDirection(size_t &row, size_t &col)
+creature selectParent(const std::vector<creature> &population)
 {
-    Directions direction;
-    do
-    {
-        direction = static_cast<Directions>(codeChoices(gen));
+    std::uniform_int_distribution<size_t> selectionDist(0, population.size() - 1);
 
-    } while (validateDirection(row, col, direction));
+    creature firstParent = population[selectionDist(gen)];
+    creature seccondParent = population[selectionDist(gen)];
 
-    switch (direction)
+    if (fitnessFunction(firstParent) > fitnessFunction(seccondParent))
     {
-    case Directions::UP:
-        --row;
-        break;
-    case Directions::DOWN:
-        ++row;
-        break;
-    case Directions::LEFT:
-        --col;
-        break;
-    case Directions::RIGHT:
-        ++col;
-        break;
-    default:
-        std::cerr << "Unreachable";
-        break;
+        return firstParent;
     }
 
-    return {row, col};
+    return seccondParent;
 }
 
-std::vector<std::pair<size_t, size_t>> randomDirection()
+creature crossover(const creature &p1, const creature &p2)
 {
-    std::vector<std::pair<size_t, size_t>> directions = {{0, 0}};
+    creature c1 = p1, c2 = p2;
 
-    size_t row = 0;
-    size_t col = 0;
+    c1.itersAlive = 0;
+    c2.itersAlive = 0;
 
-    while (board[row][col] != G)
-    {
-        directions.push_back(choseDirection(row, col));
-    }
-
-    return directions;
+    return (mutationDist(gen) < 0.5) ? c1 : c2;
 }
 
-int fitnessFunction(const chromosome &chromo)
+void mutate(creature &child)
 {
-    bool visited[ARRAY_LEN][ARRAY_LEN] = {
-        {0, 0, 0, 0, 0},
-        {0, 0, 0, 0, 0},
-        {0, 0, 0, 0, 0},
-        {0, 0, 0, 0, 0},
-        {0, 0, 0, 0, 0},
-    };
-
-    int score = 0;
-    for (const auto &[row, col] : chromo)
+    if (mutationDist(gen) < MUTATION_RATE)
     {
-        if (!visited[row][col])
+        if (mutationDist(gen) < 0.5)
         {
-            score = score + board[row][col];
-            visited[row][col] = 1;
+            child.size = child.size + 1;
         }
         else
         {
-            score = score - abs(board[row][col]);
+            child.size = child.size - 1;
         }
     }
-    return score - G;
 }
 
-chromosome selectParent(const std::vector<chromosome> &population)
+std::vector<size_t> applyDay(const std::vector<creature> &population)
 {
-    chromosome firstChild = population[selectionDist(gen)];
-    chromosome seccondChild = population[selectionDist(gen)];
-
-    if (fitnessFunction(firstChild) > fitnessFunction(seccondChild))
+    std::vector<size_t> deaths;
+    size_t size = population.size();
+    for (size_t i = 0; i < size; ++i)
     {
-        return firstChild;
-    }
-
-    return seccondChild;
-}
-
-chromosome crossover(const chromosome &p1, const chromosome &p2)
-{
-    chromosome child;
-
-    size_t aveLen = (p1.size() + p2.size()) / 2;
-
-    for (size_t i = 0; i < aveLen; ++i)
-    {
-        if (i >= p1.size())
+        // if (mutationDist(gen) < (DEATH_PROB / (population[i].size + 1)))
+        if ((mutationDist(gen) * population[i].size) < DEATH_PROB)
         {
-            child.push_back(p2[i]);
-        }
-        else if (i >= p2.size())
-        {
-            child.push_back(p1[i]);
-        }
-        else
-        {
-            child.push_back((mutationDist(gen) < 0.5) ? p1[i] : p2[i]);
+            deaths.push_back(i);
         }
     }
 
-    std::cout << child.size() << '\n';
-    return child;
+    return deaths;
 }
 
-void mutate(chromosome &child)
-{
-    for (size_t i = 0; i < child.size(); ++i)
-    {
-        if (mutationDist(gen) < MUTATION_RATE)
-        {
 
-            child[i] = choseDirection(child[i].first, child[i].second);
-        }
-    }
-}
-
-void printEnum(Directions input)
-{
-    switch (input)
-    {
-    case Directions::UP:
-        std::cout << "↓";
-        break;
-    case Directions::DOWN:
-        std::cout << "→";
-        break;
-    case Directions::LEFT:
-        std::cout << "↑";
-        break;
-    case Directions::RIGHT:
-        std::cout << "←";
-        break;
-    }
-}
-//I realized that this type of problem is not suitable for a genetic algorithm
-//🤡
 int main()
 {
-    std::vector<chromosome> population;
-    population.reserve(POPULATION_SIZE);
+    std::vector<creature> population(INITIAL_POPULATION);
 
-    for (size_t i = 0; i < POPULATION_SIZE; ++i)
+    for (size_t generation = 0; generation < 25; ++generation)
     {
-        population.push_back(randomDirection());
-    }
+        std::vector<creature> newPopulation;
 
-    for (size_t generation = 0; generation < GENERATIONS; ++generation)
-    {
-        std::vector<chromosome> newPopulation;
-        population.reserve(POPULATION_SIZE);
+        const auto deaths = applyDay(population);
 
-        for (size_t i = 0; i < POPULATION_SIZE; ++i)
+        for (auto it = deaths.rbegin(); it != deaths.rend(); ++it)
+        {
+            population.erase(population.begin() + *it);
+        }
+
+        for (auto &elem : population)
+        {
+            elem.itersAlive = elem.itersAlive + 1;
+        }
+
+
+        size_t popSize = population.size();
+        for (size_t i = 0; i < popSize/2; ++i)
         {
             const auto p1 = selectParent(population);
             const auto p2 = selectParent(population);
@@ -230,18 +112,23 @@ int main()
             newPopulation.push_back(child);
         }
 
-        population = newPopulation;
 
-        const auto bestElem = *std::max_element(population.begin(), population.end(), [](const chromosome &p1, const chromosome &p2)
-                                                { return fitnessFunction(p1) < fitnessFunction(p2); });
+        population.insert(population.begin(), newPopulation.begin(), newPopulation.end());
 
-        std::cout << "Best code so far is: ";
+        std::unordered_map<int, size_t> freq;
 
-        for (const auto &elem : bestElem)
+        for (const auto &crt : newPopulation)
         {
-            std::cout << '[' << elem.first << ',' << elem.second << ']';
+            ++freq[crt.size];
         }
 
-        std::cout << " | in genreation " << generation << '\n';
+        for (const auto &[num, count] : freq)
+        {
+            std::cout << num << " appears " << count << " times\n";
+        }
+
+
+        std::cout << "Size of population: " << population.size() << '\n';
+        std::cout << "End of " << generation << "Iter\n";
     }
 }

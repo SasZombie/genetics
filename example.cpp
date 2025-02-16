@@ -75,15 +75,15 @@ size_t fitnessFunction(const std::array<codeInput, ARRAY_LEN> &chromo)
 
 chromoArr selectParent(const std::vector<chromoArr> &population)
 {
-    chromoArr firstChild = population[selectionDist(gen)];
-    chromoArr seccondChild = population[selectionDist(gen)];
+    chromoArr firstParent = population[selectionDist(gen)];
+    chromoArr seccondParent = population[selectionDist(gen)];
 
-    if (fitnessFunction(firstChild) > fitnessFunction(seccondChild))
+    if (fitnessFunction(firstParent) > fitnessFunction(seccondParent))
     {
-        return firstChild;
+        return firstParent;
     }
 
-    return seccondChild;
+    return seccondParent;
 }
 
 chromoArr crossover(const chromoArr &p1, const chromoArr &p2)
