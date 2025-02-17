@@ -3,14 +3,14 @@
 #include <array>
 #include <random>
 
-constexpr size_t POPULATION_SIZE = 10;
+constexpr size_t POPULATION_SIZE = 25;
 constexpr size_t ARRAY_LEN = 5;
-constexpr size_t GENERATIONS = 1000;
-constexpr double MUTATION_RATE = 0.2;
+constexpr size_t GENERATIONS = 10000;
+constexpr double MUTATION_RATE = 0.5;
 
 enum Road
 {
-    T = -1,
+    T = -2,
     D = 1,
     G = 100
 };
@@ -22,9 +22,9 @@ using chromosome = std::vector<std::pair<size_t, size_t>>;
 constexpr matrix board = {{
     {D, D, D, D, T},
     {D, T, T, D, T},
-    {D, D, T, D, T},
-    {T, D, T, D, D},
-    {D, D, T, T, G},
+    {D, T, D, D, D},
+    {D, T, D, T, D},
+    {D, D, D, T, G},
 }};
 
 enum struct Directions
@@ -60,6 +60,15 @@ bool validateDirection(size_t row, size_t col, Directions direction)
     }
 
     return true;
+}
+
+bool isRelatedToParent(const std::pair<size_t, size_t> &parent, const std::pair<size_t, size_t> &child)
+{
+    if ((child.second == parent.second) && (child.first == parent.first + 1 || child.first == parent.second - 1))
+        return true;
+    if ((child.second == parent.second + 1 || child.second == parent.second - 1) && (child.first == parent.first))
+        return true;
+    return false;
 }
 
 std::pair<size_t, size_t> choseDirection(size_t &row, size_t &col)
@@ -131,7 +140,7 @@ int fitnessFunction(const chromosome &chromo)
             score = score - abs(board[row][col]);
         }
     }
-    return score - G;
+    return score;
 }
 
 chromosome selectParent(const std::vector<chromosome> &population)
@@ -150,10 +159,11 @@ chromosome selectParent(const std::vector<chromosome> &population)
 chromosome crossover(const chromosome &p1, const chromosome &p2)
 {
     chromosome child;
+    child.push_back((mutationDist(gen) < 0.5) ? p1[0] : p2[0]);
 
     size_t aveLen = (p1.size() + p2.size()) / 2;
 
-    for (size_t i = 0; i < aveLen; ++i)
+    for (size_t i = 1; i < aveLen; ++i)
     {
         if (i >= p1.size())
         {
@@ -165,23 +175,37 @@ chromosome crossover(const chromosome &p1, const chromosome &p2)
         }
         else
         {
-            child.push_back((mutationDist(gen) < 0.5) ? p1[i] : p2[i]);
+
+            bool relation1 = isRelatedToParent(p1[i], child[i - 1]);
+            bool relation2 = isRelatedToParent(p2[i], child[i - 1]);
+            if (relation1 && relation2)
+            {
+                child.push_back((mutationDist(gen) < 0.5) ? p1[i] : p2[i]);
+            }
+            else if (!relation1)
+            {
+                child.push_back(p2[i]);
+            }
+            else
+            {
+                child.push_back(p1[i]);
+            }
         }
     }
 
-    std::cout << child.size() << '\n';
     return child;
 }
 
 void mutate(chromosome &child)
 {
-    for (size_t i = 0; i < child.size(); ++i)
+    if (mutationDist(gen) < MUTATION_RATE && child.size() > 1)
     {
-        if (mutationDist(gen) < MUTATION_RATE)
-        {
-
-            child[i] = choseDirection(child[i].first, child[i].second);
-        }
+        child.pop_back();
+    }
+    else
+    {
+        auto [row, col] = child.back();
+        child.push_back(choseDirection(row, col));
     }
 }
 
@@ -201,10 +225,12 @@ void printEnum(Directions input)
     case Directions::RIGHT:
         std::cout << "←";
         break;
+    default:
+        std::cerr << "Unreachable\n";
+        break;
     }
 }
-//I realized that this type of problem is not suitable for a genetic algorithm
-//🤡
+
 int main()
 {
     std::vector<chromosome> population;
@@ -212,7 +238,7 @@ int main()
 
     for (size_t i = 0; i < POPULATION_SIZE; ++i)
     {
-        population.push_back(randomDirection());
+        population.emplace_back(std::vector<std::pair<size_t, size_t>>{{0, 0}});
     }
 
     for (size_t generation = 0; generation < GENERATIONS; ++generation)
@@ -243,5 +269,10 @@ int main()
         }
 
         std::cout << " | in genreation " << generation << '\n';
+
+        if (bestElem.back() == std::pair{4, 4})
+        {
+            break;
+        }
     }
 }
